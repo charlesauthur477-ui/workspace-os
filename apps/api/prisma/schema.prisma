@@ -1,0 +1,256 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserStatus {
+  pending
+  active
+  disabled
+}
+
+enum OpenMode {
+  embedded
+  new_tab
+  desktop_launch
+  custom
+}
+
+enum VisibilityScope {
+  private
+  role
+  workspace
+}
+
+enum InstanceStatus {
+  active
+  disabled
+}
+
+enum HealthStatus {
+  unknown
+  healthy
+  unhealthy
+}
+
+model User {
+  id            String     @id @default(uuid())
+  email         String     @unique
+  googleSub     String?    @unique
+  displayName   String
+  avatarUrl     String?
+  passwordHash  String? // reserved: only used if local-password fallback is ever enabled
+  roleId        String?
+  role          Role?      @relation(fields: [roleId], references: [id])
+  status        UserStatus @default(pending)
+  createdAt     DateTime   @default(now())
+  lastLoginAt   DateTime?
+
+  appInstances       AppInstance[]
+  rdpConnections     RdpConnection[]
+  internalServers    InternalServer[]
+  sessions           Session[]
+  notes              Note[]
+  tasks              Task[]
+  auditLogsAsActor   AuditLog[]              @relation("ActorUser")
+  instancePermissions AppInstancePermission[] @relation("UserPermission")
+
+  @@map("users")
+}
+
+model Role {
+  id          String   @id @default(uuid())
+  name        String   @unique // Owner, Admin, User, or custom
+  isSystem    Boolean  @default(false)
+  createdAt   DateTime @default(now())
+
+  users               User[]
+  rolePermissions     RolePermission[]
+  instancePermissions AppInstancePermission[] @relation("RolePermission")
+
+  @@map("roles")
+}
+
+model Permission {
+  id          String   @id @default(uuid())
+  key         String   @unique // e.g. "app.view", "rdp.connect", "user.manage"
+  description String
+
+  rolePermissions RolePermission[]
+
+  @@map("permissions")
+}
+
+model RolePermission {
+  roleId       String
+  permissionId String
+  role         Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@id([roleId, permissionId])
+  @@map("role_permissions")
+}
+
+model Category {
+  id        String   @id @default(uuid())
+  name      String   @unique
+  icon      String
+  sortOrder Int      @default(0)
+
+  appDefinitions AppDefinition[]
+
+  @@map("categories")
+}
+
+model AppDefinition {
+  id           String   @id @default(uuid())
+  slug         String   @unique
+  name         String
+  categoryId   String
+  category     Category @relation(fields: [categoryId], references: [id])
+  icon         String
+  description  String
+  openMode     OpenMode
+  configSchema Json     @default("{}")
+  capabilities String[] @default([])
+  pluginSource String? // reference to plugin package, if any
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+
+  instances AppInstance[]
+
+  @@map("app_definitions")
+}
+
+model AppInstance {
+  id              String          @id @default(uuid())
+  appDefinitionId String
+  appDefinition   AppDefinition   @relation(fields: [appDefinitionId], references: [id])
+  ownerUserId     String? // null = shared/workspace-level instance
+  owner           User?           @relation(fields: [ownerUserId], references: [id])
+  displayName     String
+  config          Json            @default("{}")
+  credentialId    String?
+  credential      Credential?     @relation(fields: [credentialId], references: [id])
+  visibilityScope VisibilityScope @default(private)
+  status          InstanceStatus  @default(active)
+  healthStatus    HealthStatus    @default(unknown)
+  createdAt       DateTime        @default(now())
+
+  permissions AppInstancePermission[]
+
+  @@map("app_instances")
+}
+
+model AppInstancePermission {
+  id            String       @id @default(uuid())
+  appInstanceId String
+  appInstance   AppInstance  @relation(fields: [appInstanceId], references: [id], onDelete: Cascade)
+  roleId        String?
+  role          Role?        @relation("RolePermission", fields: [roleId], references: [id])
+  userId        String?
+  user          User?        @relation("UserPermission", fields: [userId], references: [id])
+  canView       Boolean      @default(true)
+  canLaunch     Boolean      @default(true)
+  canManage     Boolean      @default(false)
+
+  @@map("app_instance_permissions")
+}
+
+model Credential {
+  id              String   @id @default(uuid())
+  ownerType       String // "user" | "workspace" — polymorphic, so ownerId is
+  ownerId         String   // intentionally NOT a foreign key (see ownerType)
+  encryptedBlob   Bytes
+  encryptionKeyId String
+  createdAt       DateTime @default(now())
+  rotatedAt       DateTime?
+
+  appInstances    AppInstance[]
+
+  @@map("credentials")
+}
+
+model RdpConnection {
+  id           String   @id @default(uuid())
+  ownerUserId  String
+  owner        User     @relation(fields: [ownerUserId], references: [id])
+  name         String
+  host         String
+  port         Int      @default(3389)
+  username     String
+  credentialId String
+  groupName    String?
+  notes        String?
+  createdAt    DateTime @default(now())
+
+  @@map("rdp_connections")
+}
+
+model InternalServer {
+  id             String   @id @default(uuid())
+  name           String
+  baseUrl        String
+  healthCheckUrl String?
+  description    String?
+  ownerUserId    String
+  owner          User     @relation(fields: [ownerUserId], references: [id])
+  groupName      String?
+  createdAt      DateTime @default(now())
+
+  @@map("internal_servers")
+}
+
+model Session {
+  id           String    @id @default(uuid())
+  userId       String
+  user         User      @relation(fields: [userId], references: [id])
+  refreshTokenHash String
+  ip           String?
+  userAgent    String?
+  createdAt    DateTime  @default(now())
+  expiresAt    DateTime
+  revokedAt    DateTime?
+
+  @@map("sessions")
+}
+
+model AuditLog {
+  id           String   @id @default(uuid())
+  actorUserId  String?
+  actor        User?    @relation("ActorUser", fields: [actorUserId], references: [id])
+  action       String
+  targetType   String?
+  targetId     String?
+  metadata     Json     @default("{}")
+  ip           String?
+  createdAt    DateTime @default(now())
+
+  @@map("audit_logs")
+}
+
+model Note {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  content   String
+  updatedAt DateTime @updatedAt
+
+  @@map("notes")
+}
+
+model Task {
+  id        String    @id @default(uuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id])
+  title     String
+  done      Boolean   @default(false)
+  dueDate   DateTime?
+  createdAt DateTime  @default(now())
+
+  @@map("tasks")
+}

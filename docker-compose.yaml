@@ -1,0 +1,64 @@
+version: "3.9"
+
+# Deployed via Coolify as a "Docker Compose" resource. Coolify auto-detects
+# these services, lets you assign a domain to `web` and `api` individually,
+# and terminates TLS for you — you don't need your own Nginx/Traefik here.
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: workspaceos
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-changeme}
+      POSTGRES_DB: workspaceos
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U workspaceos"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      APP_URL: ${APP_URL}
+      DATABASE_URL: postgresql://workspaceos:${POSTGRES_PASSWORD:-changeme}@postgres:5432/workspaceos
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET}
+      GOOGLE_CALLBACK_URL: ${GOOGLE_CALLBACK_URL}
+      JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET}
+      JWT_ACCESS_TTL: ${JWT_ACCESS_TTL:-15m}
+      JWT_REFRESH_TTL: ${JWT_REFRESH_TTL:-30d}
+      MASTER_ENCRYPTION_KEY: ${MASTER_ENCRYPTION_KEY}
+      OWNER_EMAIL: ${OWNER_EMAIL}
+      API_PORT: 4000
+    ports:
+      - "4000"
+    command: sh -c "npx prisma migrate deploy --schema prisma/schema.prisma && node dist/index.js"
+
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+    restart: unless-stopped
+    depends_on:
+      - api
+    environment:
+      NODE_ENV: production
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL}
+      WEB_PORT: 3000
+    ports:
+      - "3000"
+
+volumes:
+  postgres_data:
