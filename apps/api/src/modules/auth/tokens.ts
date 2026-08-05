@@ -9,7 +9,8 @@ export interface AccessTokenPayload {
 }
 
 export function signAccessToken(payload: AccessTokenPayload): string {
-  return jwt.sign(payload, env.jwtAccessSecret, { expiresIn: env.jwtAccessTtl });
+  const options: jwt.SignOptions = { expiresIn: env.jwtAccessTtl as jwt.SignOptions["expiresIn"] };
+  return jwt.sign(payload, env.jwtAccessSecret, options);
 }
 
 export function verifyAccessToken(token: string): AccessTokenPayload {
