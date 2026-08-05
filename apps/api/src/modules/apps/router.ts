@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { z } from "zod";
+import { Prisma } from "@prisma/client";
 import { prisma } from "../../lib/prisma";
 import { requireAuth, AuthedRequest } from "../../middleware/requireAuth";
 import { requirePermission } from "../../middleware/requirePermission";
@@ -48,7 +49,12 @@ const createAppDefSchema = z.object({
 
 appsRouter.post("/definitions", requirePermission("app.manage"), async (req: AuthedRequest, res) => {
   const data = createAppDefSchema.parse(req.body);
-  const def = await prisma.appDefinition.create({ data });
+  // zod's z.record(z.unknown()) types as Record<string, unknown>, which isn't
+  // structurally assignable to Prisma's InputJsonValue — cast at the boundary
+  // since this is genuinely arbitrary, caller-supplied JSON.
+  const def = await prisma.appDefinition.create({
+    data: { ...data, configSchema: data.configSchema as Prisma.InputJsonValue },
+  });
   await writeAuditLog({ actorUserId: req.auth!.userId, action: "app_definition.create", targetType: "app_definition", targetId: def.id });
   res.status(201).json(def);
 });
@@ -68,7 +74,7 @@ const createInstanceSchema = z.object({
 appsRouter.post("/instances", async (req: AuthedRequest, res) => {
   const data = createInstanceSchema.parse(req.body);
   const instance = await prisma.appInstance.create({
-    data: { ...data, ownerUserId: req.auth!.userId },
+    data: { ...data, config: data.config as Prisma.InputJsonValue, ownerUserId: req.auth!.userId },
   });
   await writeAuditLog({ actorUserId: req.auth!.userId, action: "app_instance.create", targetType: "app_instance", targetId: instance.id });
   res.status(201).json(instance);
