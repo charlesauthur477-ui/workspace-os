@@ -56,6 +56,7 @@ model User {
   sessions           Session[]
   notes              Note[]
   tasks              Task[]
+  deviceTokens       DeviceToken[]
   auditLogsAsActor   AuditLog[]              @relation("ActorUser")
   instancePermissions AppInstancePermission[] @relation("UserPermission")
 
@@ -253,4 +254,36 @@ model Task {
   createdAt DateTime  @default(now())
 
   @@map("tasks")
+}
+
+// A short-lived code the dashboard shows the user (Settings > Connector) so
+// they can pair a Workspace OS Connector install on their own machine to
+// their account, without ever putting a long-lived credential in the
+// browser. The Connector exchanges this for a DeviceToken.
+model PairingCode {
+  id        String   @id @default(uuid())
+  code      String   @unique // short human-typeable code, e.g. "WXYZ-1234"
+  userId    String
+  createdAt DateTime @default(now())
+  expiresAt DateTime
+  redeemedAt DateTime?
+
+  @@map("pairing_codes")
+}
+
+// A long-lived credential held only by one installed Connector instance,
+// used to authenticate its calls back to the API (redeeming RDP connect
+// tokens, fetching launch config). Revocable per-device without touching
+// the user's own login sessions.
+model DeviceToken {
+  id           String    @id @default(uuid())
+  userId       String
+  user         User      @relation(fields: [userId], references: [id])
+  name         String // e.g. "Charles's Desktop" — set at pairing time
+  tokenHash    String    @unique
+  createdAt    DateTime  @default(now())
+  lastSeenAt   DateTime?
+  revokedAt    DateTime?
+
+  @@map("device_tokens")
 }

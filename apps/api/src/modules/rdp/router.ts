@@ -4,16 +4,25 @@ import crypto from "crypto";
 import { prisma } from "../../lib/prisma";
 import { requireAuth, AuthedRequest } from "../../middleware/requireAuth";
 import { requirePermission } from "../../middleware/requirePermission";
+import { requireDeviceAuth, DeviceAuthedRequest } from "../../middleware/requireDeviceAuth";
 import { encryptSecret, decryptSecret } from "../credentials/encryption";
 import { writeAuditLog } from "../audit/auditLog";
 
 export const rdpRouter = Router();
-rdpRouter.use(requireAuth);
 
 // In-memory one-time-token store for the Connector handoff. A real deployment
 // would use Redis so tokens survive an API restart, but the single-use +
 // 30s-expiry design keeps the blast radius tiny either way.
 const connectTokens = new Map<string, { rdpConnectionId: string; userId: string; expiresAt: number }>();
+
+// Every route below except /connector/redeem is browser-facing and needs a
+// normal user session. /connector/redeem is called by the Connector app,
+// which authenticates with its own device token instead (see below) — it
+// must NOT go through requireAuth.
+rdpRouter.use((req, res, next) => {
+  if (req.path === "/connector/redeem") return next();
+  return requireAuth(req, res, next);
+});
 
 rdpRouter.get("/", async (req: AuthedRequest, res) => {
   const list = await prisma.rdpConnection.findMany({ where: { ownerUserId: req.auth!.userId } });
@@ -65,8 +74,9 @@ rdpRouter.delete("/:id", requirePermission("rdp.manage"), async (req: AuthedRequ
 
 // Step 1 of the Connector handoff: the dashboard tile calls this to mint a
 // short-lived, single-use token, then redirects the browser to
-// workspaceos-rdp://connect?token=<token>. The Connector app (installed on
-// the user's machine) picks that up and exchanges it in step 2.
+// workspaceos://connect?kind=rdp&token=<token>. The Connector app (installed
+// on the user's machine, registered as that protocol's handler) picks that
+// up and exchanges it in step 2.
 rdpRouter.post("/:id/connect-token", requirePermission("rdp.connect"), async (req: AuthedRequest, res) => {
   const connection = await prisma.rdpConnection.findUnique({ where: { id: req.params.id } });
   if (!connection || connection.ownerUserId !== req.auth!.userId) {
@@ -75,17 +85,22 @@ rdpRouter.post("/:id/connect-token", requirePermission("rdp.connect"), async (re
   const token = crypto.randomBytes(24).toString("base64url");
   connectTokens.set(token, { rdpConnectionId: connection.id, userId: req.auth!.userId, expiresAt: Date.now() + 30_000 });
   await writeAuditLog({ actorUserId: req.auth!.userId, action: "rdp.connect_token_issued", targetType: "rdp_connection", targetId: connection.id });
-  res.json({ token, protocolUrl: `workspaceos-rdp://connect?token=${token}` });
+  res.json({ token, protocolUrl: `workspaceos://connect?kind=rdp&token=${token}` });
 });
 
-// Step 2: called by the local Connector app (authenticated separately via a
-// device key in production — omitted here for scaffold simplicity) to
-// redeem the one-time token for decrypted connection details.
-rdpRouter.post("/connector/redeem", async (req, res) => {
+// Step 2: called by the local Connector app, authenticated with its own
+// long-lived device token (paired via POST /connector/pair/redeem) — never
+// the browser's short-lived user session. We also check the token's userId
+// matches the device's owner, so one paired device can never redeem another
+// user's connect token even if it somehow guessed/observed it.
+rdpRouter.post("/connector/redeem", requireDeviceAuth, async (req: DeviceAuthedRequest, res) => {
   const { token } = z.object({ token: z.string() }).parse(req.body);
   const entry = connectTokens.get(token);
   if (!entry || entry.expiresAt < Date.now()) {
     return res.status(400).json({ error: "Invalid or expired token" });
+  }
+  if (entry.userId !== req.device!.userId) {
+    return res.status(403).json({ error: "Token does not belong to this device's user" });
   }
   connectTokens.delete(token); // single use
 
