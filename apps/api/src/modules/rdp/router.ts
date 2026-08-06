@@ -61,6 +61,46 @@ rdpRouter.post("/", requirePermission("rdp.manage"), async (req: AuthedRequest, 
   res.status(201).json({ id: connection.id, name: connection.name });
 });
 
+const updateSchema = z.object({
+  name: z.string().min(1),
+  host: z.string().min(1),
+  port: z.number().int().default(3389),
+  username: z.string().min(1),
+  password: z.string().min(1).optional(), // omit to keep the existing password
+  groupName: z.string().optional(),
+  notes: z.string().optional(),
+});
+
+rdpRouter.put("/:id", requirePermission("rdp.manage"), async (req: AuthedRequest, res) => {
+  const connection = await prisma.rdpConnection.findUnique({ where: { id: req.params.id } });
+  if (!connection || connection.ownerUserId !== req.auth!.userId) {
+    return res.status(404).json({ error: "Not found" });
+  }
+  const data = updateSchema.parse(req.body);
+
+  if (data.password) {
+    const { blob, keyId } = encryptSecret(data.password);
+    await prisma.credential.update({
+      where: { id: connection.credentialId },
+      data: { encryptedBlob: blob, encryptionKeyId: keyId },
+    });
+  }
+
+  const updated = await prisma.rdpConnection.update({
+    where: { id: req.params.id },
+    data: {
+      name: data.name,
+      host: data.host,
+      port: data.port,
+      username: data.username,
+      groupName: data.groupName,
+      notes: data.notes,
+    },
+  });
+  await writeAuditLog({ actorUserId: req.auth!.userId, action: "rdp.update", targetType: "rdp_connection", targetId: updated.id });
+  res.json({ id: updated.id, name: updated.name });
+});
+
 rdpRouter.delete("/:id", requirePermission("rdp.manage"), async (req: AuthedRequest, res) => {
   const connection = await prisma.rdpConnection.findUnique({ where: { id: req.params.id } });
   if (!connection || connection.ownerUserId !== req.auth!.userId) {

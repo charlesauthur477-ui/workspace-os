@@ -14,6 +14,7 @@ import { AddRdpModal } from "./AddRdpModal";
 export function RemoteServersSection() {
   const [rdps, setRdps] = useState<RdpConnectionDto[] | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
+  const [editingRdp, setEditingRdp] = useState<RdpConnectionDto | null>(null);
 
   const load = useCallback(() => {
     apiFetch<RdpConnectionDto[]>("/rdp")
@@ -25,6 +26,21 @@ export function RemoteServersSection() {
     load();
   }, [load]);
 
+  const openAdd = () => {
+    setEditingRdp(null);
+    setModalOpen(true);
+  };
+
+  const openEdit = (rdp: RdpConnectionDto) => {
+    setEditingRdp(rdp);
+    setModalOpen(true);
+  };
+
+  const closeModal = () => {
+    setModalOpen(false);
+    setEditingRdp(null);
+  };
+
   return (
     <section className="mb-8">
       <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-gray-400">
@@ -32,11 +48,11 @@ export function RemoteServersSection() {
       </h2>
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
         {(rdps ?? []).map((rdp) => (
-          <RdpCard key={rdp.id} rdp={rdp} />
+          <RdpCard key={rdp.id} rdp={rdp} onEdit={openEdit} onDeleted={load} />
         ))}
 
         <button
-          onClick={() => setModalOpen(true)}
+          onClick={openAdd}
           className="glass flex flex-col items-center justify-center gap-2 rounded-xl border-dashed p-4 text-center text-gray-400 transition hover:border-accent/50 hover:text-white"
         >
           <Plus className="h-6 w-6" />
@@ -44,7 +60,7 @@ export function RemoteServersSection() {
         </button>
       </div>
 
-      <AddRdpModal open={modalOpen} onClose={() => setModalOpen(false)} onCreated={load} />
+      <AddRdpModal open={modalOpen} onClose={closeModal} onSaved={load} editingRdp={editingRdp} />
     </section>
   );
 }
