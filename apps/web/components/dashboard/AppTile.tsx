@@ -24,11 +24,14 @@ export function AppTile({ app }: { app: AppTileData }) {
       case "new_tab":
         if (app.launchUrl) window.open(app.launchUrl, "_blank", "noopener,noreferrer");
         break;
-      case "embedded":
-        // Handled by the parent dashboard mounting an <iframe> panel; here we
-        // just signal intent by navigating to a panel route.
-        window.location.href = `/apps/${app.instanceId ?? app.id}`;
+      case "embedded": {
+        // Panel route renders the app in an iframe with a "open in new tab"
+        // escape hatch — pass along what it needs via query string so the
+        // panel doesn't need its own API round-trip just to render.
+        const params = new URLSearchParams({ name: app.name, ...(app.launchUrl ? { url: app.launchUrl } : {}) });
+        window.location.href = `/apps/${app.instanceId ?? app.id}?${params.toString()}`;
         break;
+      }
       case "desktop_launch": {
         // RDP / desktop apps: mint a one-time token, hand off to the local
         // Workspace OS Connector via its custom protocol handler.

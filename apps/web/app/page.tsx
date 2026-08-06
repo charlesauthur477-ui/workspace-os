@@ -6,6 +6,7 @@ import { apiFetch } from "@/lib/api";
 import { CategorySection } from "@/components/dashboard/CategorySection";
 import { SystemUsage } from "@/components/dashboard/SystemUsage";
 import { AppTileData } from "@/components/dashboard/AppTile";
+import { RemoteServersSection } from "@/components/RemoteServers/RemoteServersSection";
 import { CategoryDto } from "@/lib/types";
 
 export default function DashboardPage() {
@@ -36,6 +37,13 @@ export default function DashboardPage() {
       </div>
 
       {categories.map((cat) => {
+        // Remote Servers is a dedicated RDP grid, not a generic app category
+        // (RDP entries are private-per-user connection details, not App
+        // Definitions) — render it in the same sort position instead.
+        if (cat.name === "Remote Servers") {
+          return <RemoteServersSection key={cat.id} />;
+        }
+
         const apps: AppTileData[] = cat.appDefinitions.flatMap((def) =>
           def.instances.length > 0
             ? def.instances.map((inst) => ({

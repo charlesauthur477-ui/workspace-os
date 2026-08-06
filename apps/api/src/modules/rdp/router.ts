@@ -52,6 +52,17 @@ rdpRouter.post("/", requirePermission("rdp.manage"), async (req: AuthedRequest, 
   res.status(201).json({ id: connection.id, name: connection.name });
 });
 
+rdpRouter.delete("/:id", requirePermission("rdp.manage"), async (req: AuthedRequest, res) => {
+  const connection = await prisma.rdpConnection.findUnique({ where: { id: req.params.id } });
+  if (!connection || connection.ownerUserId !== req.auth!.userId) {
+    return res.status(404).json({ error: "Not found" });
+  }
+  await prisma.rdpConnection.delete({ where: { id: req.params.id } });
+  await prisma.credential.deleteMany({ where: { id: connection.credentialId } });
+  await writeAuditLog({ actorUserId: req.auth!.userId, action: "rdp.delete", targetType: "rdp_connection", targetId: req.params.id });
+  res.json({ ok: true });
+});
+
 // Step 1 of the Connector handoff: the dashboard tile calls this to mint a
 // short-lived, single-use token, then redirects the browser to
 // workspaceos-rdp://connect?token=<token>. The Connector app (installed on
