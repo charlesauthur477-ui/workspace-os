@@ -1,5 +1,6 @@
 import { Router, Response } from "express";
 import { z } from "zod";
+import { Prisma } from "@prisma/client";
 import { prisma } from "../../lib/prisma";
 import { requireAuth, AuthedRequest } from "../../middleware/requireAuth";
 import { requirePermission } from "../../middleware/requirePermission";
@@ -65,7 +66,7 @@ const createAppDefSchema = z.object({
 
 appsRouter.post("/definitions", requirePermission("app.manage"), async (req: AuthedRequest, res) => {
   const data = createAppDefSchema.parse(req.body);
-  const def = await prisma.appDefinition.create({ data });
+  const def = await prisma.appDefinition.create({ data: data as Prisma.AppDefinitionUncheckedCreateInput });
   await writeAuditLog({ actorUserId: req.auth!.userId, action: "app_definition.create", targetType: "app_definition", targetId: def.id, metadata: { name: def.name, slug: def.slug } });
   res.status(201).json(def);
 });
@@ -104,7 +105,7 @@ appsRouter.patch("/definitions/:id", requirePermission("app.manage"), async (req
   if (!existing) return res.status(404).json({ error: "Not found" });
 
   const data = updateAppDefSchema.parse(req.body);
-  const updated = await prisma.appDefinition.update({ where: { id: req.params.id }, data });
+  const updated = await prisma.appDefinition.update({ where: { id: req.params.id }, data: data as Prisma.AppDefinitionUncheckedUpdateInput });
   await writeAuditLog({
     actorUserId: req.auth!.userId,
     action: "app_definition.update",
@@ -153,7 +154,7 @@ appsRouter.post("/instances", async (req: AuthedRequest, res) => {
     throw e;
   }
   const instance = await prisma.appInstance.create({
-    data: { ...data, ownerUserId: req.auth!.userId },
+    data: { ...data, ownerUserId: req.auth!.userId } as Prisma.AppInstanceUncheckedCreateInput,
   });
   await writeAuditLog({ actorUserId: req.auth!.userId, action: "app_instance.create", targetType: "app_instance", targetId: instance.id });
   res.status(201).json(instance);
@@ -193,7 +194,7 @@ appsRouter.patch("/instances/:id", async (req: AuthedRequest, res) => {
     }
   }
 
-  const updated = await prisma.appInstance.update({ where: { id: req.params.id }, data });
+  const updated = await prisma.appInstance.update({ where: { id: req.params.id }, data: data as Prisma.AppInstanceUncheckedUpdateInput });
   await writeAuditLog({ actorUserId: req.auth!.userId, action: "app_instance.update", targetType: "app_instance", targetId: updated.id, metadata: { changedFields: Object.keys(data) } });
   res.json(updated);
 });
