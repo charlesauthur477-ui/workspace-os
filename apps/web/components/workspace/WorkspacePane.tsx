@@ -4,43 +4,70 @@
 // openMode. new_tab / desktop_launch / custom never create tabs (AppTile
 // still handles those exactly as before), so this only ever has to handle
 // embedded / internal / rdp / terminal.
+//
+// Phase 4: "rdp" tabs are handled differently from every other openMode.
+// embedded/internal/terminal only ever render the single *active* tab (the
+// old behavior — switching away unmounts it, which is fine, they're
+// stateless or cheaply re-orderable). RDP sessions are not: they're a live
+// WebSocket connection to a remote desktop, and the spec requires that
+// opening RDP 2 must not disturb RDP 1, and that multiple RDP connections
+// can be open "simultaneously". So every open "rdp" tab gets its own
+// persistently-mounted RdpPane (kept alive via CSS visibility, not
+// mount/unmount) for as long as the tab stays open in WorkspaceTabBar —
+// only actually closing the tab tears down its session.
 
 import { useEffect, useState, ComponentType } from "react";
-import { ExternalLink, Monitor, Terminal as TerminalIcon, Puzzle as PuzzleIcon } from "lucide-react";
+import { ExternalLink, Terminal as TerminalIcon, Puzzle as PuzzleIcon } from "lucide-react";
 import * as Icons from "lucide-react";
-import { useWorkspace } from "@/lib/workspace/WorkspaceContext";
+import { useWorkspace, WorkspaceTab } from "@/lib/workspace/WorkspaceContext";
 import { internalApps } from "@/lib/internalApps";
+import { RdpPane } from "./RdpPane";
 
 export function WorkspacePane() {
   const { tabs, activeKey } = useWorkspace();
-  const tab = tabs.find((t) => t.key === activeKey);
+  const activeTab = tabs.find((t) => t.key === activeKey);
+  const rdpTabs = tabs.filter((t) => t.openMode === "rdp");
 
-  if (!tab) {
-    return (
-      <div className="flex h-full items-center justify-center text-sm text-gray-500">
-        This tab is no longer open.
-      </div>
-    );
-  }
+  return (
+    <div className="relative h-full">
+      {/* Persistent RDP sessions. Always mounted for every open rdp tab,
+          hidden (not unmounted) when not active, so the underlying
+          Guacamole connection survives switching to another tab or Home. */}
+      {rdpTabs.map((tab) => (
+        <div
+          key={tab.key}
+          className={tab.key === activeKey ? "absolute inset-0" : "absolute inset-0 hidden"}
+        >
+          <RdpPane tab={tab} />
+        </div>
+      ))}
 
+      {activeTab && activeTab.openMode !== "rdp" ? (
+        <div className="absolute inset-0">
+          <NonRdpPane tab={activeTab} />
+        </div>
+      ) : null}
+
+      {!activeTab ? (
+        <div className="absolute inset-0 flex items-center justify-center text-sm text-gray-500">
+          This tab is no longer open.
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function NonRdpPane({ tab }: { tab: WorkspaceTab }) {
   switch (tab.openMode) {
     case "embedded":
       return <EmbeddedPane url={tab.launchUrl} title={tab.title} />;
     case "internal":
       return <InternalPane componentKey={tab.componentKey} />;
-    case "rdp":
-      return (
-        <PlaceholderPane
-          icon={Monitor}
-          title="Browser-based RDP coming in Phase 4"
-          body="This app will open a remote desktop session in-browser once the RDP workspace is built. In the meantime, use Remote Servers to download a .rdp file for this connection."
-        />
-      );
     case "terminal":
       return (
         <PlaceholderPane
           icon={TerminalIcon}
-          title="Terminal coming in Phase 5"
+          title="Terminal coming in a later phase"
           body="This app will open an in-browser terminal session once the terminal workspace is built. No SSH session is available yet."
         />
       );

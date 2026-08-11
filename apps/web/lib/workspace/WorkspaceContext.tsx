@@ -19,6 +19,7 @@ export interface WorkspaceTab {
   openMode: "embedded" | "internal" | "rdp" | "terminal";
   launchUrl?: string; // embedded only
   componentKey?: string; // internal only — looked up in lib/internalApps.ts
+  rdpConnectionId?: string; // rdp only — the RdpConnection id, used to start a Guacamole session
 }
 
 interface WorkspaceContextValue {

@@ -23,4 +23,15 @@ export const env = {
 
   masterEncryptionKey: required("MASTER_ENCRYPTION_KEY"),
   ownerEmail: required("OWNER_EMAIL"),
+
+  // Phase 4 — browser-based RDP via Apache Guacamole. GUACAMOLE_INTERNAL_URL
+  // is server-to-server only (private Docker network, e.g.
+  // http://guacamole:8080/guacamole) and is used to redeem a signed session
+  // token. GUACAMOLE_PUBLIC_URL is the browser-reachable HTTPS origin the
+  // frontend opens its WebSocket tunnel against — it is not secret, just a
+  // URL. JSON_SECRET_KEY is the 128-bit shared secret with the guacamole
+  // container's own JSON_SECRET_KEY env var; it must never reach the browser.
+  guacamoleInternalUrl: process.env.GUACAMOLE_INTERNAL_URL ?? "http://guacamole:8080/guacamole",
+  guacamolePublicUrl: required("GUACAMOLE_PUBLIC_URL"),
+  jsonSecretKey: required("JSON_SECRET_KEY"),
 };

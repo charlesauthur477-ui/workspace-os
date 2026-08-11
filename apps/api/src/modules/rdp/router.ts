@@ -1,14 +1,28 @@
 import { Router } from "express";
 import { z } from "zod";
 import crypto from "crypto";
+import rateLimit from "express-rate-limit";
 import { prisma } from "../../lib/prisma";
 import { requireAuth, AuthedRequest } from "../../middleware/requireAuth";
 import { requirePermission } from "../../middleware/requirePermission";
 import { requireDeviceAuth, DeviceAuthedRequest } from "../../middleware/requireDeviceAuth";
 import { encryptSecret, decryptSecret } from "../credentials/encryption";
 import { writeAuditLog } from "../audit/auditLog";
+import { buildJsonAuthPayload, redeemGuacamoleToken } from "./guacamoleAuth";
+import { env } from "../../config/env";
 
 export const rdpRouter = Router();
+
+// Phase 4: dedicated limiter for the session-start endpoint — separate from
+// any general API rate limiting, since this one triggers real work against
+// guacd/the target RDP host and decrypts a credential on every call.
+const guacamoleSessionLimiter = rateLimit({
+  windowMs: 60_000,
+  max: 12,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Too many remote desktop session requests. Please wait a moment and try again." },
+});
 
 // In-memory one-time-token store for the Connector handoff. A real deployment
 // would use Redis so tokens survive an API restart, but the single-use +
@@ -127,6 +141,80 @@ rdpRouter.post("/:id/connect-token", requirePermission("rdp.connect"), async (re
   await writeAuditLog({ actorUserId: req.auth!.userId, action: "rdp.connect_token_issued", targetType: "rdp_connection", targetId: connection.id });
   res.json({ token, protocolUrl: `workspaceos://connect?kind=rdp&token=${token}` });
 });
+
+// Phase 4: starts a browser-based RDP session for this connection, rendered
+// inside the Workspace OS tab (WorkspacePane -> RdpPane), never a separate
+// desktop app. See apps/api/src/modules/rdp/guacamoleAuth.ts for the
+// signing/encryption details.
+//
+// Flow: authenticate (requireAuth, global on this router) -> check
+// rdp.connect permission -> load the connection and verify this user owns
+// it -> load + decrypt the credential (server-side only) -> build a signed,
+// encrypted, single-use description of this one connection -> redeem it
+// against Guacamole's own /api/tokens over the private Docker network ->
+// return ONLY the resulting opaque token + connection id + Guacamole's
+// public base URL. The plaintext password exists only in this function's
+// local variables for the duration of the request and is never included in
+// the response, logged, or put in a URL/query string.
+rdpRouter.post(
+  "/:id/guacamole-session",
+  guacamoleSessionLimiter,
+  requirePermission("rdp.connect"),
+  async (req: AuthedRequest, res) => {
+    const connection = await prisma.rdpConnection.findUnique({ where: { id: req.params.id } });
+    if (!connection || connection.ownerUserId !== req.auth!.userId) {
+      return res.status(404).json({ error: "Not found" });
+    }
+
+    const credential = await prisma.credential.findUnique({ where: { id: connection.credentialId } });
+    if (!credential) {
+      return res.status(404).json({ error: "Credential not found" });
+    }
+
+    try {
+      const password = decryptSecret(Buffer.from(credential.encryptedBlob));
+      // Unique + non-guessable per connection; this is also the GUAC_ID the
+      // frontend must present when opening the tunnel, so it must match
+      // exactly what we key the JSON `connections` object with below.
+      const connectionName = `rdp-${connection.id}`;
+
+      const data = buildJsonAuthPayload({
+        username: req.auth!.userId,
+        connectionName,
+        connection: {
+          hostname: connection.host,
+          port: connection.port,
+          username: connection.username,
+          password,
+        },
+      });
+
+      const { authToken } = await redeemGuacamoleToken(data);
+
+      await writeAuditLog({
+        actorUserId: req.auth!.userId,
+        action: "rdp.guacamole_session_start",
+        targetType: "rdp_connection",
+        targetId: connection.id,
+        metadata: { name: connection.name, host: connection.host },
+      });
+
+      res.json({
+        token: authToken,
+        connectionId: connectionName,
+        dataSource: "json",
+        guacBaseUrl: env.guacamolePublicUrl,
+      });
+    } catch (e) {
+      // Never leak internals (guacd host, stack traces, etc.) to the
+      // browser — log server-side only.
+      console.error("Guacamole session start failed:", e);
+      res.status(502).json({
+        error: "The remote desktop service is currently unavailable. Please try again shortly.",
+      });
+    }
+  }
+);
 
 // Step 2: called by the local Connector app, authenticated with its own
 // long-lived device token (paired via POST /connector/pair/redeem) — never

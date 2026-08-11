@@ -42,6 +42,16 @@ services:
       MASTER_ENCRYPTION_KEY: ${MASTER_ENCRYPTION_KEY}
       OWNER_EMAIL: ${OWNER_EMAIL}
       API_PORT: 4000
+      # Phase 4 — browser-based RDP via Guacamole. GUACAMOLE_INTERNAL_URL
+      # stays on the private Compose network (server-to-server only, used to
+      # redeem a signed session token). GUACAMOLE_PUBLIC_URL is the domain
+      # you assign to the `guacamole` service below in Coolify — the
+      # frontend opens its WebSocket tunnel against it directly. Generate
+      # JSON_SECRET_KEY once with `openssl rand -hex 16` and set the same
+      # value on both `api` and `guacamole` below.
+      GUACAMOLE_INTERNAL_URL: http://guacamole:8080/guacamole
+      GUACAMOLE_PUBLIC_URL: ${GUACAMOLE_PUBLIC_URL}
+      JSON_SECRET_KEY: ${JSON_SECRET_KEY}
     ports:
       - "4000"
     command: sh -c "npx prisma migrate deploy --schema prisma/schema.prisma && node dist/index.js"
@@ -59,6 +69,40 @@ services:
       WEB_PORT: 3000
     ports:
       - "3000"
+
+  # Phase 4 — Apache Guacamole. Two containers, no database of its own: the
+  # `guacamole` webapp is configured with ONLY the JSON auth extension
+  # (enabled below via JSON_SECRET_KEY), so it never stores users,
+  # connections, or credentials — every RDP session is described fresh by
+  # the `api` service at connect time (apps/api/src/modules/rdp/
+  # guacamoleAuth.ts) and signed with the shared secret. There is
+  # deliberately no MySQL/PostgreSQL/LDAP auth backend to provision or keep
+  # in sync.
+  guacd:
+    image: guacamole/guacd:1.5.5
+    restart: unless-stopped
+    # No `ports:` entry — reachable only by the `guacamole` service, over
+    # the private Compose network, via the hostname `guacd`. guacd is a
+    # passive proxy with no authentication of its own; never expose its
+    # port (4822) publicly.
+
+  guacamole:
+    image: guacamole/guacamole:1.5.5
+    restart: unless-stopped
+    depends_on:
+      - guacd
+    environment:
+      GUACD_HOSTNAME: guacd
+      GUACD_PORT: 4822
+      JSON_SECRET_KEY: ${JSON_SECRET_KEY}
+    ports:
+      - "8080"
+    # Assign this service its own domain in Coolify (Configuration ->
+    # General -> "Domains for guacamole"), the same way `api` and `web`
+    # already have theirs. Set that domain (with /guacamole appended) as
+    # GUACAMOLE_PUBLIC_URL on the `api` service above. Coolify terminates
+    # TLS and proxies WebSocket upgrades the same way it already does for
+    # `web`/`api` — no extra reverse-proxy config needed here.
 
 volumes:
   postgres_data:
