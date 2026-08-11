@@ -8,7 +8,7 @@ export interface AppTileData {
   id: string;
   name: string;
   icon: string;
-  openMode: "embedded" | "new_tab" | "desktop_launch" | "custom";
+  openMode: "embedded" | "new_tab" | "desktop_launch" | "internal" | "rdp" | "terminal" | "custom";
   launchUrl?: string;
   instanceId?: string; // present once the user has configured this app
 }
@@ -45,6 +45,30 @@ export function AppTile({ app }: { app: AppTileData }) {
       case "custom":
         window.location.href = `/apps/${app.instanceId ?? app.id}`;
         break;
+      case "internal": {
+        // Phase 2: no WorkspaceShell yet — route to the generic app panel
+        // in a clearly-marked "coming soon" state. Phase 3 will replace
+        // this with an in-shell native view instead of a full navigation.
+        const params = new URLSearchParams({ name: app.name, mode: "internal" });
+        window.location.href = `/apps/${app.instanceId ?? app.id}?${params.toString()}`;
+        break;
+      }
+      case "rdp": {
+        // Phase 2 placeholder only — does NOT connect to Guacamole. Actual
+        // browser-based RDP gateway is a separate, later phase requiring
+        // its own approval. Existing Remote Servers (.rdp download) cards
+        // are untouched and do not go through this openMode path.
+        const params = new URLSearchParams({ name: app.name, mode: "rdp" });
+        window.location.href = `/apps/${app.instanceId ?? app.id}?${params.toString()}`;
+        break;
+      }
+      case "terminal": {
+        // Phase 2 placeholder only — does NOT open an SSH session or
+        // execute any command. Terminal/SSH bridge is a later phase.
+        const params = new URLSearchParams({ name: app.name, mode: "terminal" });
+        window.location.href = `/apps/${app.instanceId ?? app.id}?${params.toString()}`;
+        break;
+      }
     }
   }, [app]);
 

@@ -1,7 +1,11 @@
 // Shared types used by both apps/web and apps/api.
 // Keep this package framework-agnostic (no React, no Express types here).
 
-export type OpenMode = "embedded" | "new_tab" | "desktop_launch" | "custom";
+// "internal", "rdp", and "terminal" are Phase 2 additions: the dispatch
+// logic and DB enum values exist now, but they route to placeholder UI
+// only — no WorkspaceShell, no Guacamole, no SSH execution yet (those are
+// later phases, each requiring separate approval).
+export type OpenMode = "embedded" | "new_tab" | "desktop_launch" | "internal" | "rdp" | "terminal" | "custom";
 
 export type UserStatus = "pending" | "active" | "disabled";
 

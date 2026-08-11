@@ -3,7 +3,7 @@ export interface AppDefinitionDto {
   slug: string;
   name: string;
   icon: string;
-  openMode: "embedded" | "new_tab" | "desktop_launch" | "custom";
+  openMode: "embedded" | "new_tab" | "desktop_launch" | "internal" | "rdp" | "terminal" | "custom";
   instances: { id: string; displayName: string; config: Record<string, unknown> }[];
 }
 
