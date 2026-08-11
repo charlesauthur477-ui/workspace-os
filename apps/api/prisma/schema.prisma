@@ -17,6 +17,9 @@ enum OpenMode {
   embedded
   new_tab
   desktop_launch
+  internal // NEW (Phase 1 schema only — WorkspaceShell/dispatch wiring lands in Phase 2/3)
+  rdp      // NEW (Phase 1 schema only — Guacamole integration is a later phase)
+  terminal // NEW (Phase 1 schema only — SSH/terminal bridge is a later phase)
   custom
 }
 
@@ -52,6 +55,7 @@ model User {
 
   appInstances       AppInstance[]
   rdpConnections     RdpConnection[]
+  sshConnections     SshConnection[]
   internalServers    InternalServer[]
   sessions           Session[]
   notes              Note[]
@@ -120,9 +124,12 @@ model AppDefinition {
   capabilities String[] @default([])
   pluginSource String? // reference to plugin package, if any
   isActive     Boolean  @default(true)
+  launchCommand String? // NEW — opaque command/template handed to a local agent for desktop_launch/terminal apps; the API must never exec() this itself
+  sortOrder    Int      @default(0) // NEW — per-app ordering within its category; 0 preserves today's insertion order for existing rows
   createdAt    DateTime @default(now())
 
-  instances AppInstance[]
+  instances    AppInstance[]
+  workspaceRoute WorkspaceAppRoute?
 
   @@map("app_definitions")
 }
@@ -187,9 +194,46 @@ model RdpConnection {
   credentialId String
   groupName    String?
   notes        String?
+  guacamoleConnectionId String? // NEW — set once a Guacamole connection is provisioned for this entry (future phase; unused until then)
   createdAt    DateTime @default(now())
 
   @@map("rdp_connections")
+}
+
+// Maps an "internal" AppDefinition to a known frontend route/component, so
+// adding a new native Workspace app is a data change (insert a row + register
+// a component key), never a frontend routing/AppTile code change. Unused
+// until Phase 3/6 build the Workspace Container and the component registry —
+// created now so the schema doesn't need another migration then.
+model WorkspaceAppRoute {
+  id              String        @id @default(uuid())
+  appDefinitionId String        @unique
+  appDefinition   AppDefinition @relation(fields: [appDefinitionId], references: [id])
+  routeSlug       String        @unique // e.g. "files", "notes", "crm"
+  componentKey    String        // maps to a registered React component, not a raw path
+  createdAt       DateTime      @default(now())
+
+  @@map("workspace_app_routes")
+}
+
+// Mirrors RdpConnection deliberately: SSH connection details are private
+// per-user credentials, not shared AppDefinition rows (same reasoning as
+// RDP). Schema only for now — no WebSocket/SSH execution is wired up until
+// Phase 5, which requires separate approval.
+model SshConnection {
+  id           String   @id @default(uuid())
+  ownerUserId  String
+  owner        User     @relation(fields: [ownerUserId], references: [id])
+  name         String
+  host         String
+  port         Int      @default(22)
+  username     String
+  credentialId String? // nullable: key-based auth may use a stored key credential; agent-forwarding may need none
+  authMethod   String   @default("password") // "password" | "private_key"
+  groupName    String?
+  createdAt    DateTime @default(now())
+
+  @@map("ssh_connections")
 }
 
 model InternalServer {
