@@ -28,6 +28,12 @@ appsRouter.get("/dashboard", async (req: AuthedRequest, res) => {
               status: "active",
             },
           },
+          // Phase 3: only ever exposes the opaque routeSlug/componentKey
+          // pair for openMode "internal" apps — never a file path or code.
+          // Still gated by the same isActive + instance-visibility filters
+          // above, so an app the user can't see never carries a resolvable
+          // route to the frontend either.
+          workspaceRoute: { select: { routeSlug: true, componentKey: true } },
         },
       },
     },

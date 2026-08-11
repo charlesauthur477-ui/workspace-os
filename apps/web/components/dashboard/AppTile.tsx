@@ -3,6 +3,7 @@
 import { useCallback } from "react";
 import * as Icons from "lucide-react";
 import { apiFetch } from "@/lib/api";
+import { useWorkspace } from "@/lib/workspace/WorkspaceContext";
 
 export interface AppTileData {
   id: string;
@@ -11,30 +12,39 @@ export interface AppTileData {
   openMode: "embedded" | "new_tab" | "desktop_launch" | "internal" | "rdp" | "terminal" | "custom";
   launchUrl?: string;
   instanceId?: string; // present once the user has configured this app
+  componentKey?: string; // Phase 3 — only meaningful when openMode is "internal"
 }
 
 // The core tile component: it doesn't know *what* the app is, only how to
-// resolve its openMode into an action. This is the piece that makes the
-// plugin system real — new apps never require a new tile component.
+// resolve its openMode into an action, driven entirely by the metadata on
+// `app`. Phase 3 changes where embedded/internal/rdp/terminal apps open
+// (into the WorkspaceShell as a tab, instead of a full-page navigation) but
+// still never hard-codes a single app name — new apps never require a new
+// tile component or an AppTile code change.
 export function AppTile({ app }: { app: AppTileData }) {
   const Icon = (Icons as unknown as Record<string, Icons.LucideIcon>)[app.icon] ?? Icons.AppWindow;
+  const { openTab } = useWorkspace();
 
   const launch = useCallback(async () => {
     switch (app.openMode) {
       case "new_tab":
+        // Unchanged: existing external-browser behavior.
         if (app.launchUrl) window.open(app.launchUrl, "_blank", "noopener,noreferrer");
         break;
-      case "embedded": {
-        // Panel route renders the app in an iframe with a "open in new tab"
-        // escape hatch — pass along what it needs via query string so the
-        // panel doesn't need its own API round-trip just to render.
-        const params = new URLSearchParams({ name: app.name, ...(app.launchUrl ? { url: app.launchUrl } : {}) });
-        window.location.href = `/apps/${app.instanceId ?? app.id}?${params.toString()}`;
+      case "embedded":
+        // Phase 3: opens inside the Workspace OS shell as a tab instead of a
+        // full-page navigation, so the dashboard stays open behind it.
+        openTab({
+          key: app.instanceId ?? app.id,
+          title: app.name,
+          icon: app.icon,
+          openMode: "embedded",
+          launchUrl: app.launchUrl,
+        });
         break;
-      }
       case "desktop_launch": {
-        // RDP / desktop apps: mint a one-time token, hand off to the local
-        // Workspace OS Connector via its custom protocol handler.
+        // Unchanged: mint a one-time token, hand off to the local Workspace
+        // OS Connector via its custom protocol handler.
         const res = await apiFetch<{ protocolUrl: string }>(
           `/rdp/${app.instanceId}/connect-token`,
           { method: "POST" }
@@ -43,34 +53,33 @@ export function AppTile({ app }: { app: AppTileData }) {
         break;
       }
       case "custom":
+        // Unchanged: full-page navigation to the generic app panel.
         window.location.href = `/apps/${app.instanceId ?? app.id}`;
         break;
-      case "internal": {
-        // Phase 2: no WorkspaceShell yet — route to the generic app panel
-        // in a clearly-marked "coming soon" state. Phase 3 will replace
-        // this with an in-shell native view instead of a full navigation.
-        const params = new URLSearchParams({ name: app.name, mode: "internal" });
-        window.location.href = `/apps/${app.instanceId ?? app.id}?${params.toString()}`;
+      case "internal":
+        // Phase 3: opens the registered internal React component inside the
+        // shell, keyed by the opaque componentKey resolved server-side from
+        // WorkspaceAppRoute — never a raw path/import driven by the DB.
+        openTab({
+          key: app.instanceId ?? app.id,
+          title: app.name,
+          icon: app.icon,
+          openMode: "internal",
+          componentKey: app.componentKey,
+        });
         break;
-      }
-      case "rdp": {
-        // Phase 2 placeholder only — does NOT connect to Guacamole. Actual
-        // browser-based RDP gateway is a separate, later phase requiring
-        // its own approval. Existing Remote Servers (.rdp download) cards
-        // are untouched and do not go through this openMode path.
-        const params = new URLSearchParams({ name: app.name, mode: "rdp" });
-        window.location.href = `/apps/${app.instanceId ?? app.id}?${params.toString()}`;
+      case "rdp":
+        // Phase 3: still just a clearly-marked placeholder tab — does NOT
+        // connect to Guacamole. Actual browser-based RDP is a later phase.
+        openTab({ key: app.instanceId ?? app.id, title: app.name, icon: app.icon, openMode: "rdp" });
         break;
-      }
-      case "terminal": {
-        // Phase 2 placeholder only — does NOT open an SSH session or
-        // execute any command. Terminal/SSH bridge is a later phase.
-        const params = new URLSearchParams({ name: app.name, mode: "terminal" });
-        window.location.href = `/apps/${app.instanceId ?? app.id}?${params.toString()}`;
+      case "terminal":
+        // Phase 3: still just a clearly-marked placeholder tab — does NOT
+        // open an SSH session or execute anything. Later phase.
+        openTab({ key: app.instanceId ?? app.id, title: app.name, icon: app.icon, openMode: "terminal" });
         break;
-      }
     }
-  }, [app]);
+  }, [app, openTab]);
 
   return (
     <button

@@ -1,10 +1,17 @@
+export type OpenMode = "embedded" | "new_tab" | "desktop_launch" | "internal" | "rdp" | "terminal" | "custom";
+
 export interface AppDefinitionDto {
   id: string;
   slug: string;
   name: string;
   icon: string;
-  openMode: "embedded" | "new_tab" | "desktop_launch" | "internal" | "rdp" | "terminal" | "custom";
+  openMode: OpenMode;
   instances: { id: string; displayName: string; config: Record<string, unknown> }[];
+  // Phase 3: only present for openMode "internal" — resolved server-side from
+  // the WorkspaceAppRoute table. componentKey is an opaque string; the
+  // frontend's internalApps registry (lib/internalApps.ts) is the only place
+  // it is ever mapped to a real React component.
+  workspaceRoute?: { routeSlug: string; componentKey: string } | null;
 }
 
 export interface CategoryDto {

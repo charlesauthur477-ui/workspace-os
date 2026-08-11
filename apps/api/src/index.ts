@@ -12,6 +12,7 @@ import { rdpRouter } from "./modules/rdp/router";
 import { connectorRouter } from "./modules/connector/router";
 import { metricsRouter } from "./modules/metrics/router";
 import { auditRouter } from "./modules/audit/router";
+import { notesRouter } from "./modules/notes/router";
 
 const app = express();
 
@@ -30,6 +31,7 @@ app.use("/rdp", rdpRouter);
 app.use("/connector", connectorRouter);
 app.use("/metrics", metricsRouter);
 app.use("/audit", auditRouter);
+app.use("/notes", notesRouter);
 
 app.get("/health", (_req, res) => res.json({ status: "ok" }));
 
