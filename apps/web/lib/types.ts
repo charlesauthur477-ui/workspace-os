@@ -48,6 +48,7 @@ export interface SshConnectionDto {
   port: number;
   username: string;
   authMethod: "password" | "private_key";
+  networkRoute: "public" | "tailscale";
   groupName: string | null;
   enabled: boolean;
   createdAt: string;

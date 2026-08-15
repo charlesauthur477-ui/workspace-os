@@ -34,4 +34,7 @@ export const env = {
   guacamoleInternalUrl: process.env.GUACAMOLE_INTERNAL_URL ?? "http://guacamole:8080/guacamole",
   guacamolePublicUrl: required("GUACAMOLE_PUBLIC_URL"),
   jsonSecretKey: required("JSON_SECRET_KEY"),
+
+  tailscaleProxyHost: process.env.TAILSCALE_PROXY_HOST ?? "tailscale",
+  tailscaleProxyPort: Number(process.env.TAILSCALE_PROXY_PORT ?? 1055),
 };

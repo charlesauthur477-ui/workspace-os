@@ -31,6 +31,7 @@ terminalRouter.get("/", async (req: AuthedRequest, res) => {
 });
 
 const authMethodSchema = z.enum(["password", "private_key"]);
+const networkRouteSchema = z.enum(["public", "tailscale"]);
 
 const createSchema = z.object({
   name: z.string().min(1),
@@ -41,6 +42,7 @@ const createSchema = z.object({
   secret: z.string().min(1), // password, or private key contents — never persisted as-is
   groupName: z.string().optional(),
   enabled: z.boolean().default(true),
+  networkRoute: networkRouteSchema.default("public"),
 });
 
 terminalRouter.post("/", requirePermission("ssh.manage"), async (req: AuthedRequest, res) => {
@@ -68,6 +70,7 @@ terminalRouter.post("/", requirePermission("ssh.manage"), async (req: AuthedRequ
       credentialId: credential.id,
       groupName: data.groupName,
       enabled: data.enabled,
+      networkRoute: data.networkRoute,
     },
   });
   await writeAuditLog({ actorUserId: req.auth!.userId, action: "ssh.create", targetType: "ssh_connection", targetId: connection.id });
@@ -83,6 +86,7 @@ const updateSchema = z.object({
   secret: z.string().min(1).optional(), // omit to keep the existing credential
   groupName: z.string().optional(),
   enabled: z.boolean().default(true),
+  networkRoute: networkRouteSchema.default("public"),
 });
 
 terminalRouter.put("/:id", requirePermission("ssh.manage"), async (req: AuthedRequest, res) => {
@@ -125,6 +129,7 @@ terminalRouter.put("/:id", requirePermission("ssh.manage"), async (req: AuthedRe
       credentialId,
       groupName: data.groupName,
       enabled: data.enabled,
+      networkRoute: data.networkRoute,
     },
   });
   await writeAuditLog({ actorUserId: req.auth!.userId, action: "ssh.update", targetType: "ssh_connection", targetId: updated.id });

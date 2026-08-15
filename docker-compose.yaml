@@ -52,6 +52,8 @@ services:
       GUACAMOLE_INTERNAL_URL: http://guacamole:8080/guacamole
       GUACAMOLE_PUBLIC_URL: ${GUACAMOLE_PUBLIC_URL}
       JSON_SECRET_KEY: ${JSON_SECRET_KEY}
+      TAILSCALE_PROXY_HOST: tailscale
+      TAILSCALE_PROXY_PORT: "1055"
     ports:
       - "4000"
     command: sh -c "npx prisma migrate deploy --schema prisma/schema.prisma && node dist/index.js"
@@ -104,5 +106,27 @@ services:
     # TLS and proxies WebSocket upgrades the same way it already does for
     # `web`/`api` — no extra reverse-proxy config needed here.
 
+  # Phase 5B -- Tailscale sidecar. Gives the api container a private path
+  # to dial SSH targets over the user's tailnet, without making the
+  # Workspace itself depend on Tailscale and without exposing anything new
+  # publicly: no ports: entry here, so the SOCKS5 proxy is reachable only
+  # from other containers on this network, by service name tailscale.
+  # Runs in userspace-networking mode (image default), so this container
+  # needs no NET_ADMIN and no /dev/net/tun -- it cannot be a subnet router
+  # or exit node. TS_AUTHKEY is a deployment-only secret set in Coolify's
+  # env panel, never in this file or Git, never read by api/web/postgres.
+  tailscale:
+    image: tailscale/tailscale:stable
+    restart: unless-stopped
+    environment:
+      TS_AUTHKEY: ${TS_AUTHKEY}
+      TS_HOSTNAME: ${TS_HOSTNAME:-workspace-os-backend}
+      TS_SOCKS5_SERVER: ":1055"
+      TS_STATE_DIR: /var/lib/tailscale
+      TS_AUTH_ONCE: "true"
+    volumes:
+      - tailscale_state:/var/lib/tailscale
+
 volumes:
   postgres_data:
+  tailscale_state:

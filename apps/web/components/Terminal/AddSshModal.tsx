@@ -24,6 +24,7 @@ export function AddSshModal({ open, onClose, onSaved, editingSsh }: Props) {
   const [port, setPort] = useState("22");
   const [username, setUsername] = useState("");
   const [authMethod, setAuthMethod] = useState<"password" | "private_key">("password");
+  const [networkRoute, setNetworkRoute] = useState<"public" | "tailscale">("public");
   const [secret, setSecret] = useState("");
   const [groupName, setGroupName] = useState("");
   const [enabled, setEnabled] = useState(true);
@@ -38,6 +39,7 @@ export function AddSshModal({ open, onClose, onSaved, editingSsh }: Props) {
       setPort(String(editingSsh.port));
       setUsername(editingSsh.username);
       setAuthMethod(editingSsh.authMethod);
+      setNetworkRoute(editingSsh.networkRoute ?? "public");
       setSecret("");
       setGroupName(editingSsh.groupName ?? "");
       setEnabled(editingSsh.enabled);
@@ -47,6 +49,7 @@ export function AddSshModal({ open, onClose, onSaved, editingSsh }: Props) {
       setPort("22");
       setUsername("");
       setAuthMethod("password");
+      setNetworkRoute("public");
       setSecret("");
       setGroupName("");
       setEnabled(true);
@@ -67,6 +70,7 @@ export function AddSshModal({ open, onClose, onSaved, editingSsh }: Props) {
         port: Number(port) || 22,
         username,
         authMethod,
+        networkRoute,
         groupName: groupName || undefined,
         enabled,
       };
@@ -141,6 +145,18 @@ export function AddSshModal({ open, onClose, onSaved, editingSsh }: Props) {
               />
             </label>
           )}
+
+          <label className="block">
+            <span className="mb-1 block text-xs font-medium text-gray-400">Network Route</span>
+            <select
+              value={networkRoute}
+              onChange={(e) => setNetworkRoute(e.target.value as "public" | "tailscale")}
+              className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-gray-100 outline-none focus:border-accent/60"
+            >
+              <option value="public">Public (direct)</option>
+              <option value="tailscale">Private (Tailscale)</option>
+            </select>
+          </label>
 
           <Field label="Group (optional)" value={groupName} onChange={setGroupName} placeholder="e.g. Client Work" />
 

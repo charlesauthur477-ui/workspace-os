@@ -2,6 +2,7 @@ import { WebSocketServer, WebSocket } from "ws";
 import type { Server as HttpServer, IncomingMessage } from "http";
 import type { Duplex } from "stream";
 import { Client as SshClient, ClientChannel } from "ssh2";
+import { SocksClient } from "socks";
 import crypto from "crypto";
 import { prisma } from "../../lib/prisma";
 import { decryptSecret } from "../credentials/encryption";
@@ -203,8 +204,6 @@ async function handleConnection(ws: WebSocket, sshConnectionId: string, userId: 
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const connectConfig: any = {
-    host: connection.host,
-    port: connection.port,
     username: connection.username,
     readyTimeout: SSH_READY_TIMEOUT_MS,
   };
@@ -212,6 +211,33 @@ async function handleConnection(ws: WebSocket, sshConnectionId: string, userId: 
     connectConfig.privateKey = secret;
   } else {
     connectConfig.password = secret;
+  }
+
+  if (connection.networkRoute === "tailscale") {
+    try {
+      const { socket } = await SocksClient.createConnection({
+        proxy: { host: env.tailscaleProxyHost, port: env.tailscaleProxyPort, type: 5 },
+        command: "connect",
+        destination: { host: connection.host, port: connection.port },
+        timeout: SSH_READY_TIMEOUT_MS,
+      });
+      connectConfig.sock = socket;
+    } catch {
+      await writeAuditLog({
+        actorUserId: userId,
+        action: "terminal.connection_failed",
+        targetType: "ssh_connection",
+        targetId: connection.id,
+        metadata: { reason: "tailscale_proxy_unreachable", name: connection.name, host: connection.host },
+      });
+      send(ws, { type: "error", message: "Could not reach the private (Tailscale) network for this host." });
+      cleanup();
+      ws.close();
+      return;
+    }
+  } else {
+    connectConfig.host = connection.host;
+    connectConfig.port = connection.port;
   }
 
   sshClient.on("ready", () => {

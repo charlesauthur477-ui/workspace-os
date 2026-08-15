@@ -231,6 +231,7 @@ model SshConnection {
   username     String
   credentialId String? // nullable: key-based auth may use a stored key credential; agent-forwarding may need none
   authMethod   String   @default("password") // "password" | "private_key"
+  networkRoute String   @default("public") // "public" | "tailscale"
   groupName    String?
   enabled      Boolean  @default(true)
   createdAt    DateTime @default(now())
