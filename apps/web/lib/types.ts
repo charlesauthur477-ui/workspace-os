@@ -36,3 +36,20 @@ export interface RdpConnectionDto {
   notes: string | null;
   createdAt: string;
 }
+
+// Terminal (SSH) — mirrors RdpConnectionDto's reasoning: private per-user
+// connection details, never routed through the generic App Definition
+// system. `authMethod` drives which secret field AddSshModal shows; the
+// browser never receives credentialId or any decrypted secret.
+export interface SshConnectionDto {
+  id: string;
+  name: string;
+  host: string;
+  port: number;
+  username: string;
+  authMethod: "password" | "private_key";
+  groupName: string | null;
+  enabled: boolean;
+  createdAt: string;
+  updatedAt: string;
+}

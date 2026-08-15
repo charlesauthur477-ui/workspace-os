@@ -20,6 +20,7 @@ export interface WorkspaceTab {
   launchUrl?: string; // embedded only
   componentKey?: string; // internal only — looked up in lib/internalApps.ts
   rdpConnectionId?: string; // rdp only — the RdpConnection id, used to start a Guacamole session
+  sshConnectionId?: string; // terminal only — the SshConnection id, used to authorize a terminal session
 }
 
 interface WorkspaceContextValue {

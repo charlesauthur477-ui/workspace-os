@@ -218,8 +218,9 @@ model WorkspaceAppRoute {
 
 // Mirrors RdpConnection deliberately: SSH connection details are private
 // per-user credentials, not shared AppDefinition rows (same reasoning as
-// RDP). Schema only for now — no WebSocket/SSH execution is wired up until
-// Phase 5, which requires separate approval.
+// RDP). Phase 5A wires up the WebSocket/SSH bridge; `enabled` lets an owner
+// disable a saved connection without deleting it (checked on every terminal
+// session authorization), `updatedAt` tracks edits the same way `Note` does.
 model SshConnection {
   id           String   @id @default(uuid())
   ownerUserId  String
@@ -231,7 +232,9 @@ model SshConnection {
   credentialId String? // nullable: key-based auth may use a stored key credential; agent-forwarding may need none
   authMethod   String   @default("password") // "password" | "private_key"
   groupName    String?
+  enabled      Boolean  @default(true)
   createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 
   @@map("ssh_connections")
 }

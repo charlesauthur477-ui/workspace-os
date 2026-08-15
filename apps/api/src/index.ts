@@ -1,3 +1,4 @@
+import http from "http";
 import express from "express";
 import cors from "cors";
 import helmet from "helmet";
@@ -13,6 +14,8 @@ import { connectorRouter } from "./modules/connector/router";
 import { metricsRouter } from "./modules/metrics/router";
 import { auditRouter } from "./modules/audit/router";
 import { notesRouter } from "./modules/notes/router";
+import { terminalRouter } from "./modules/terminal/router";
+import { attachTerminalWebSocketServer } from "./modules/terminal/wsServer";
 
 const app = express();
 
@@ -32,9 +35,16 @@ app.use("/connector", connectorRouter);
 app.use("/metrics", metricsRouter);
 app.use("/audit", auditRouter);
 app.use("/notes", notesRouter);
+app.use("/terminal", terminalRouter);
 
 app.get("/health", (_req, res) => res.json({ status: "ok" }));
 
-app.listen(env.port, () => {
+// Phase 5A: an explicit http.Server (instead of app.listen()'s implicit
+// one) so the terminal WebSocket can hook the server's "upgrade" event
+// directly, on its own path (/terminal/ws), without a second listener/port.
+const server = http.createServer(app);
+attachTerminalWebSocketServer(server);
+
+server.listen(env.port, () => {
   console.log(`Workspace OS API listening on :${env.port}`);
 });

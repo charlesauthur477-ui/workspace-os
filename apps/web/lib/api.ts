@@ -31,3 +31,14 @@ export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> 
 export function googleLoginUrl(): string {
   return `${API_URL}/auth/google`;
 }
+
+// Phase 5A: builds a browser-reachable WebSocket URL against the same API
+// origin (ws/wss mirrors whatever scheme API_URL uses). The terminal
+// WebSocket authenticates via a short-lived one-time token minted by
+// POST /terminal/:id/terminal-session — passed as a query param here — not
+// the JWT access token, so this deliberately does not attach one.
+export function apiWebSocketUrl(path: string, params?: Record<string, string>): string {
+  const wsBase = API_URL.replace(/^http/, "ws");
+  const query = params ? `?${new URLSearchParams(params).toString()}` : "";
+  return `${wsBase}${path}${query}`;
+}

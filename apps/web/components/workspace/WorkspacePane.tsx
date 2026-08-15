@@ -6,27 +6,35 @@
 // embedded / internal / rdp / terminal.
 //
 // Phase 4: "rdp" tabs are handled differently from every other openMode.
-// embedded/internal/terminal only ever render the single *active* tab (the
-// old behavior — switching away unmounts it, which is fine, they're
-// stateless or cheaply re-orderable). RDP sessions are not: they're a live
-// WebSocket connection to a remote desktop, and the spec requires that
-// opening RDP 2 must not disturb RDP 1, and that multiple RDP connections
-// can be open "simultaneously". So every open "rdp" tab gets its own
+// embedded/internal only ever render the single *active* tab (the old
+// behavior — switching away unmounts it, which is fine, they're stateless
+// or cheaply re-orderable). RDP sessions are not: they're a live WebSocket
+// connection to a remote desktop, and the spec requires that opening RDP 2
+// must not disturb RDP 1, and that multiple RDP connections can be open
+// "simultaneously". So every open "rdp" tab gets its own
 // persistently-mounted RdpPane (kept alive via CSS visibility, not
 // mount/unmount) for as long as the tab stays open in WorkspaceTabBar —
 // only actually closing the tab tears down its session.
+//
+// Phase 5A: "terminal" tabs need the exact same treatment for the exact
+// same reason — an SSH session is also a live, stateful connection, and the
+// spec requires multiple open terminal tabs to "behave independently"
+// (switching away must not disconnect them). So terminal tabs get their own
+// persistent TerminalPane layer, mirroring the rdpTabs layer below.
 
 import { useEffect, useState, ComponentType } from "react";
-import { ExternalLink, Terminal as TerminalIcon, Puzzle as PuzzleIcon } from "lucide-react";
+import { ExternalLink, Puzzle as PuzzleIcon } from "lucide-react";
 import * as Icons from "lucide-react";
 import { useWorkspace, WorkspaceTab } from "@/lib/workspace/WorkspaceContext";
 import { internalApps } from "@/lib/internalApps";
 import { RdpPane } from "./RdpPane";
+import { TerminalPane } from "./TerminalPane";
 
 export function WorkspacePane() {
   const { tabs, activeKey } = useWorkspace();
   const activeTab = tabs.find((t) => t.key === activeKey);
   const rdpTabs = tabs.filter((t) => t.openMode === "rdp");
+  const terminalTabs = tabs.filter((t) => t.openMode === "terminal");
 
   return (
     <div className="relative h-full">
@@ -42,7 +50,17 @@ export function WorkspacePane() {
         </div>
       ))}
 
-      {activeTab && activeTab.openMode !== "rdp" ? (
+      {/* Persistent terminal sessions — same reasoning as rdpTabs above. */}
+      {terminalTabs.map((tab) => (
+        <div
+          key={tab.key}
+          className={tab.key === activeKey ? "absolute inset-0" : "absolute inset-0 hidden"}
+        >
+          <TerminalPane tab={tab} />
+        </div>
+      ))}
+
+      {activeTab && activeTab.openMode !== "rdp" && activeTab.openMode !== "terminal" ? (
         <div className="absolute inset-0">
           <NonRdpPane tab={activeTab} />
         </div>
@@ -63,14 +81,6 @@ function NonRdpPane({ tab }: { tab: WorkspaceTab }) {
       return <EmbeddedPane url={tab.launchUrl} title={tab.title} />;
     case "internal":
       return <InternalPane componentKey={tab.componentKey} />;
-    case "terminal":
-      return (
-        <PlaceholderPane
-          icon={TerminalIcon}
-          title="Terminal coming in a later phase"
-          body="This app will open an in-browser terminal session once the terminal workspace is built. No SSH session is available yet."
-        />
-      );
     default:
       return null;
   }

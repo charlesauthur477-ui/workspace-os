@@ -7,6 +7,7 @@ import { CategorySection } from "@/components/dashboard/CategorySection";
 import { SystemUsage } from "@/components/dashboard/SystemUsage";
 import { AppTileData } from "@/components/dashboard/AppTile";
 import { RemoteServersSection } from "@/components/RemoteServers/RemoteServersSection";
+import { SshConnectionsSection } from "@/components/Terminal/SshConnectionsSection";
 import { CategoryDto } from "@/lib/types";
 
 export function DashboardHome({ categories }: { categories: CategoryDto[] }) {
@@ -22,6 +23,9 @@ export function DashboardHome({ categories }: { categories: CategoryDto[] }) {
       {categories.map((cat) => {
         if (cat.name === "Remote Servers") {
           return <RemoteServersSection key={cat.id} />;
+        }
+        if (cat.name === "Terminal") {
+          return <SshConnectionsSection key={cat.id} />;
         }
         const apps: AppTileData[] = cat.appDefinitions.flatMap((def) =>
           def.instances.length > 0

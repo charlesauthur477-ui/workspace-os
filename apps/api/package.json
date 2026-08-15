@@ -21,7 +21,9 @@
     "zod": "^3.23.8",
     "systeminformation": "^5.22.11",
     "express-rate-limit": "^7.4.0",
-    "dotenv": "^16.4.5"
+    "dotenv": "^16.4.5",
+    "ssh2": "^1.15.0",
+    "ws": "^8.18.0"
   },
   "devDependencies": {
     "typescript": "^5.5.4",
@@ -31,6 +33,8 @@
     "@types/node": "^22.5.0",
     "@types/cors": "^2.8.17",
     "@types/cookie-parser": "^1.4.7",
-    "@types/jsonwebtoken": "^9.0.6"
+    "@types/jsonwebtoken": "^9.0.6",
+    "@types/ssh2": "^1.15.0",
+    "@types/ws": "^8.5.12"
   }
 }

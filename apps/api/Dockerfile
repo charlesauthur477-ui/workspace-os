@@ -1,8 +1,12 @@
 FROM node:22-alpine AS base
-RUN apk add --no-cache openssl
 WORKDIR /app
 
 FROM base AS deps
+# Phase 5A: ssh2 has an optional native addon (cpu-features) that needs a
+# build toolchain on Alpine — without this, npm install still "succeeds"
+# but silently skips the addon and ssh2 falls back to a pure-JS path, which
+# is fine functionally but let's build it properly since the tools are cheap.
+RUN apk add --no-cache python3 make g++
 COPY package.json ./
 COPY apps/api/package.json ./apps/api/
 COPY packages/shared-types/package.json ./packages/shared-types/

@@ -10,6 +10,8 @@ async function main() {
     { key: "app.manage", description: "Create/edit/delete app definitions" },
     { key: "rdp.connect", description: "Connect to an RDP entry" },
     { key: "rdp.manage", description: "Create/edit/delete RDP entries" },
+    { key: "ssh.connect", description: "Open a browser-based terminal session on an SSH entry" },
+    { key: "ssh.manage", description: "Create/edit/delete SSH entries" },
     { key: "user.manage", description: "Approve, disable, and assign roles to users" },
     { key: "role.manage", description: "Manage roles and their permissions" },
     { key: "audit.view", description: "View the audit log" },
@@ -40,8 +42,10 @@ async function main() {
     }
   };
   await grant(owner.id, allPerms.map((p) => p.key));
-  await grant(admin.id, ["app.view", "app.manage", "rdp.connect", "rdp.manage", "user.manage", "audit.view"]);
-  await grant(user.id, ["app.view", "rdp.connect"]);
+  await grant(admin.id, [
+    "app.view", "app.manage", "rdp.connect", "rdp.manage", "ssh.connect", "ssh.manage", "user.manage", "audit.view",
+  ]);
+  await grant(user.id, ["app.view", "rdp.connect", "ssh.connect"]);
 
   const categories = [
     { name: "AI Agent", icon: "bot", sortOrder: 1 },
@@ -52,6 +56,7 @@ async function main() {
     { name: "AI", icon: "sparkles", sortOrder: 6 },
     { name: "Numbers", icon: "phone", sortOrder: 7 },
     { name: "My Servers", icon: "server", sortOrder: 8 },
+    { name: "Terminal", icon: "terminal", sortOrder: 9 },
   ];
   for (const c of categories) {
     await prisma.category.upsert({ where: { name: c.name }, update: {}, create: c });
