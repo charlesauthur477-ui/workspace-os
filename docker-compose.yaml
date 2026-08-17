@@ -117,6 +117,7 @@ services:
   # env panel, never in this file or Git, never read by api/web/postgres.
   tailscale:
     image: tailscale/tailscale:stable
+    profiles: ["tailscale"]  # opt-in only; see comment above tailscale service
     restart: unless-stopped
     environment:
       TS_AUTHKEY: ${TS_AUTHKEY}
